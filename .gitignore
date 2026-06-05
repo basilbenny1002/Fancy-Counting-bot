@@ -1,0 +1,15 @@
+# Env files
+.env
+env/
+ENV/
+.env.*
+venv/
+.venv/
+
+# Pycache and pyc files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# State files / sensitive files
+data/state.json

@@ -1,0 +1,64 @@
+{
+  "wrong_count": [
+    "ni hao fine shi, {MENTION} messed up, the next number was supposed to be {CORRECT_VALUE} and not {WRONG_VALUE}. Back to the beginning, next number is 1!",
+    "{MENTION} YOU FRENCH BAGGUET u messsed up. We're starting over from 1.",
+    "{MENTION} an autistic beetroot, who can't count. Next number is 1 again.",
+    "{MENTION} stinky socks detected... next number was supposed to be {CORRECT_VALUE}. Resetting back to 1!",
+    "{MENTION} Two brain celled potato, don't you know how to count? basic mathematics? Next number is 1.",
+    "¡sɔıʇɐɯǝɥʇɐɯ ɔısɐq ¿ʇunoɔ oʇ ʍoɥ ʍouʞ noʎ ʇ,uop 'oʇɐʇod pǝllǝɔ uıɐɹq oʍ⊥ {MENTION} sdn pǝssǝɯ. 1 oʇ ʞɔɐq",
+    "你算错了 {MENTION}, 下一个数字是 {CORRECT_VALUE} (You counted wrong, next number is {CORRECT_VALUE}). We are restarting from 1."
+  ],
+  "wrong_count_at_one": [
+    "{MENTION} You should get glasses, i said above like next number is 1",
+    "{MENTION} literally just started and you already messed up. It's 1.",
+    "{MENTION} are you blind? We are at 1."
+  ],
+  "deleted_wrong_count": [
+    "{MENTION} is trying to hide embarassmnen, by deleting but little does he know i see everything"
+  ],
+  "deleted_correct_count": [
+    "I saw that 👀 {MENTION} THEY DELETED THE NUMBER TRYING TO TRAP OTHERS",
+    "lil bro {MENTION} trying to troll"
+  ],
+  "plus_one_spam": [
+    "{MENTION} okay i'll consider it, but ukw u can just add all those ones and tyep as {CORRECT_VALUE}",
+    "{MENTION} stop spamming +1 and just type {CORRECT_VALUE} next time buddy"
+  ],
+  "mentions_1": [
+    "hi",
+    "hello there",
+    "sup"
+  ],
+  "mentions_2": [
+    "hi, im nto an AI can't talk",
+    "im not AI can't talk",
+    "stop mentioning me im just a script"
+  ],
+  "mentions_3_plus": [
+    "I TOLD OYU Im not an AI bro i can't yap Teh developer can't afford an AI api",
+    "developer is too broke to get AI api, pls donate 🥲",
+    "leave me alone, I only know how to count"
+  ],
+  "phd_math": [
+    "{MENTION} Dude i don't have a PHD in mathematics to do all these calculations"
+  ],
+  "constants": [
+    "{MENTION} i remmeber seeing these back in highschool, but pain to calculate, but i ma let this side for now"
+  ],
+  "trigonometry": [
+    "{MENTION} glad i studied trignometry"
+  ],
+  "calculus": [
+    "{MENTION} sorry developer failed maths, hes bad at calculus so didn't learn em. I'm not calculating that! The next number is still {EXPECTED_VALUE}.",
+    "{MENTION} bro I don't know calculus 😭. Please just tell me what {EXPECTED_VALUE} is.",
+    "{MENTION} dev didn't learn calculus, so i ma not calculate that. And next number is {EXPECTED_VALUE}."
+  ],
+  "calc_troll": [
+    "why using calc bro send it adn see what happens"
+  ],
+  "fell_for_troll": [
+    "{MENTION} haha bro fell for it, that was a troll! Next number is {CORRECT_VALUE}.",
+    "{MENTION} you actually fell for the troll 😂 Next number is {CORRECT_VALUE}.",
+    "{MENTION} caught in 4k falling for the troll 📸 Next number is {CORRECT_VALUE}."
+  ]
+}
