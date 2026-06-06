@@ -1,3 +1,4 @@
 Commit at 2026-06-05 18:39:04 +0530: add new troll response messages
 Commit at 2026-06-05 20:39:30 +0530: cleanup debug logs
 Commit at 2026-06-06 08:12:20 +0530: refactor configuration loaders
+Commit at 2026-06-06 08:14:51 +0530: add logs rotation helper
