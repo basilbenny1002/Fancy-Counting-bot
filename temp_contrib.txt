@@ -16,3 +16,4 @@ Commit at 2026-06-09 09:58:12 +0530: update dependencies checklist
 Commit at 2026-06-09 10:34:37 +0530: refactor configuration loaders
 Commit at 2026-06-09 10:43:27 +0530: refactor math parsing logic
 Commit at 2026-06-09 13:17:31 +0530: refactor math parsing logic
+Commit at 2026-06-09 14:20:09 +0530: add logs rotation helper
