@@ -57,8 +57,8 @@
     "why using calc bro send it adn see what happens"
   ],
   "fell_for_troll": [
-    "{MENTION} haha bro fell for it, that was a troll! Next number is {CORRECT_VALUE}.",
-    "{MENTION} you actually fell for the troll 😂 Next number is {CORRECT_VALUE}.",
-    "{MENTION} caught in 4k falling for the troll 📸 Next number is {CORRECT_VALUE}."
+    "{MENTION} haha bro fell for it, that was a troll! Next number is 1.",
+    "{MENTION} you actually fell for the troll 😂 Next number is 1.",
+    "{MENTION} caught in 4k falling for the troll 📸 Next number is 1."
   ]
 }
