@@ -27,9 +27,11 @@ def evaluate_math(expression: str):
     Returns the integer result or None if it's invalid.
     """
     try:
+        # Strip leading zeros to prevent python SyntaxError
+        expression = re.sub(r'(?<!\.)\b0+(?=\d)', '', expression)
         result = evaluator.eval(expression)
         if isinstance(result, (int, float)):
-            return int(result)
+            return round(result)
         return None
     except Exception:
         return None
@@ -38,6 +40,8 @@ def parse_message(content: str):
     """
     Returns a dict with various parsing flags.
     """
+    content = content[:6]
+    
     base_result = {
         "is_number": False,
         "value": None,
