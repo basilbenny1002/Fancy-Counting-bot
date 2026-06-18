@@ -11,6 +11,9 @@ class SetGroup(app_commands.Group):
     @app_commands.command(name="counting", description="Set the current channel as the counting channel.")
     @app_commands.default_permissions(administrator=True)
     async def counting(self, interaction: discord.Interaction):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("You must be an administrator to use this command.", ephemeral=True)
+            return
         update_guild_state(interaction.guild_id, channel_id=interaction.channel_id, current_count=0, last_user_id=None)
         await interaction.response.send_message(f"Counting channel set to {interaction.channel.mention}. Start counting from 1!", ephemeral=False)
 
@@ -21,6 +24,9 @@ class SettingGroup(app_commands.Group):
     @app_commands.command(name="consecutive", description="Allow or disallow consecutive counting by the same user.")
     @app_commands.default_permissions(administrator=True)
     async def consecutive(self, interaction: discord.Interaction, allow: bool):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("You must be an administrator to use this command.", ephemeral=True)
+            return
         update_guild_state(interaction.guild_id, allow_consecutive=allow)
         await interaction.response.send_message(f"Consecutive counting is now {'allowed' if allow else 'disallowed'}.", ephemeral=False)
 
