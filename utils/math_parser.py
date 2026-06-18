@@ -1,6 +1,7 @@
 import simpleeval
 import re
 import math
+from decimal import Decimal, ROUND_HALF_UP
 
 # Create a custom simple_eval instance with math functions and constants
 def create_evaluator():
@@ -21,6 +22,7 @@ def create_evaluator():
 
 evaluator = create_evaluator()
 
+
 def evaluate_math(expression: str):
     """
     Safely evaluate a mathematical expression.
@@ -31,7 +33,7 @@ def evaluate_math(expression: str):
         expression = re.sub(r'(?<!\.)\b0+(?=\d)', '', expression)
         result = evaluator.eval(expression)
         if isinstance(result, (int, float)):
-            return round(result)
+            return int(Decimal(str(result)).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
         return None
     except Exception:
         return None
