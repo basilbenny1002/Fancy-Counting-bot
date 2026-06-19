@@ -3,15 +3,16 @@ from discord.ext import commands
 import json
 import asyncio
 import random
-from utils.state import get_guild_state, update_guild_state
+import time
+from utils.state import get_guild_state, update_guild_state, get_muted_user, update_muted_user
 from utils.math_parser import parse_message
+from utils.ai_chat import chatbot_instance
 
 class Counting(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.responses = self.load_json("data/responses.json")
         self.emojis = self.load_json("data/emojis.json")
-        self.bot_mentions = {} # user_id -> count
 
     def load_json(self, path):
         with open(path, "r", encoding="utf-8") as f:
@@ -40,20 +41,53 @@ class Counting(commands.Cog):
         if message.author.bot:
             return
 
-        # Check for bot mentions
-        if self.bot.user in message.mentions:
+        # AI Chat integration (mentions or replies to bot)
+        is_mention = self.bot.user in message.mentions
+        
+        bot_context_msg = None
+        is_reply = False
+        if message.reference and message.reference.resolved:
+            if getattr(message.reference.resolved, 'author', None) == self.bot.user:
+                is_reply = True
+                bot_context_msg = message.reference.resolved.content
+
+        if is_mention or is_reply:
+            state = get_guild_state(message.guild.id)
             uid = message.author.id
-            self.bot_mentions[uid] = self.bot_mentions.get(uid, 0) + 1
-            times = self.bot_mentions[uid]
+            muted_data = get_muted_user(uid)
             
-            if times == 1:
-                response = self.format_response("mentions_1", message.author.mention)
-            elif times == 2:
-                response = self.format_response("mentions_2", message.author.mention)
-            else:
-                response = self.format_response("mentions_3_plus", message.author.mention)
+            if muted_data:
+                # User is muted
+                ping_count = muted_data.get("ping_count", 0) + 1
+                update_muted_user(uid, ping_count=ping_count)
                 
-            await message.channel.send(response)
+                if ping_count >= 3:
+                    resp = self.format_response("muted_spam_reply", message.author.mention)
+                else:
+                    resp = self.format_response("muted_random_reply", message.author.mention)
+                await message.channel.send(resp)
+                return
+
+            # Not muted, query AI
+            async with message.channel.typing():
+                reply = await chatbot_instance.get_response(
+                    user_id=uid,
+                    username=message.author.display_name,
+                    user_message=message.content,
+                    current_count=state.get("current_count", 0),
+                    bot_context_msg=bot_context_msg
+                )
+                
+                if reply == "MUTE_USER":
+                    update_muted_user(uid, muted_until=time.time() + 3600, ping_count=0)
+                    chatbot_instance.clear_memory(uid)
+                    resp = self.format_response("ai_timeout", message.author.mention)
+                    await message.channel.send(resp)
+                elif reply == "API_ERROR":
+                    resp = self.format_response("ai_error", message.author.mention)
+                    await message.channel.send(resp)
+                else:
+                    await message.channel.send(reply)
             return
 
         state = get_guild_state(message.guild.id)
