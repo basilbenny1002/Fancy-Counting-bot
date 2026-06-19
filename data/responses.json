@@ -6,12 +6,62 @@
     "{MENTION} stinky socks detected... next number was supposed to be {CORRECT_VALUE}. Resetting back to 1!",
     "{MENTION} Two brain celled potato, don't you know how to count? basic mathematics? Next number is 1.",
     "¡sɔıʇɐɯǝɥʇɐɯ ɔısɐq ¿ʇunoɔ oʇ ʍoɥ ʍouʞ noʎ ʇ,uop 'oʇɐʇod pǝllǝɔ uıɐɹq oʍ⊥ {MENTION} sdn pǝssǝɯ. 1 oʇ ʞɔɐq",
-    "你算错了 {MENTION}, 下一个数字是 {CORRECT_VALUE} (You counted wrong, next number is {CORRECT_VALUE}). We are restarting from 1."
+    "你算错了 {MENTION}, 下一个数字是 {CORRECT_VALUE} (You counted wrong, next number is {CORRECT_VALUE}). We are restarting from 1.",
+    "{MENTION} ni hao fine shit, you absolutely fumbled the bag. It was {CORRECT_VALUE}, not {WRONG_VALUE}. Back to 1 you go.",
+    "{MENTION} gorgeous lil rat, you ruined the whole streak. {CORRECT_VALUE} was the play, not {WRONG_VALUE}. Next number is 1.",
+    "{MENTION} look at you, you gorgeous guinea pig with zero math skills. Next number is 1 again.",
+    "{MENTION} you absolute tomato ketchup bottle, leaking wrong numbers everywhere. Back to 1!",
+    "{MENTION} a literal smooth-brained amoeba could have typed {CORRECT_VALUE}, but you chose violence. Restarting from 1.",
+    "{MENTION} you soggy piece of cardboard, {CORRECT_VALUE} comes after the last number, not {WRONG_VALUE}. Back to 1.",
+    "{MENTION} clean your glasses, you crusty croissant. We're restarting from 1 because of you.",
+    "{MENTION} you moldy loaf of bread, how do you mess up a simple sequence? Back to 1.",
+    "{MENTION} packing a grand total of one collective brain cell today, huh? The next number was {CORRECT_VALUE}. Next is 1.",
+    "{MENTION} missing a whole chromosome or just basic vision? {CORRECT_VALUE} was the number. Restarting from 1.",
+    "{MENTION} you uncultured piece of broccoli, go back to kindergarten. Next number is 1.",
+    "¡1 oʇ ʞɔɐq ƃuıʇɹɐʇsǝɹ ǝɹ,ǝʍ puɐ dılɟ dılɟ dılɟ ʇuǝʍ ʞɐǝɹʇs ǝɥʇ 'oʇɐʇod lıl snoǝƃɹoƃ {MENTION}",
+    "{MENTION} you radioactive trash can, you single-handedly destroyed the streak. Back to 1.",
+    "{MENTION} my brother in christ, you typed {WRONG_VALUE} when it was supposed to be {CORRECT_VALUE}. Next number is 1.",
+    "{MENTION} stop yapping and start counting properly, you absolute wet noodle. Back to 1.",
+    "{MENTION} standard issue dumbass right here. Next number is 1.",
+    "{MENTION} you flat soda bottle, absolutely zero carbonation or brain power left. Next number is 1.",
+    "错错错！{MENTION} you blind bat, next number was supposed to be {CORRECT_VALUE}. Restarting from 1!",
+    "{MENTION} congratulations, you just set the whole channel back to 1. Go celebrate with your two brain cells.",
+    "{MENTION} a literal brick wall could count better than you. Back to the starting line, next number is 1.",
+    "{MENTION} you expired milk carton, your math is sour. The next number is 1.",
+    "{MENTION} go back to playing with blocks, you beautiful disaster. Resetting back to 1.",
+    "{MENTION} did your fingers slip or are you genuinely built different? {CORRECT_VALUE} was the answer. Next is 1.",
+    "{MENTION} you absolute traffic cone, standing in the way of progress. Back to 1.",
+    "{MENTION} please delete your keyboard, you gorgeous lil potato. We are starting over from 1.",
+    "{MENTION} {WRONG_VALUE}??? Are you high on glue? The next number is 1.",
+    "{MENTION} you overcooked noodle, go sit in the corner. Next number is 1.",
+    "{MENTION} ni hao fine shit, your counting privileges have been revoked. Resetting to 1.",
+    "{MENTION} a localized natural disaster in human form. Next number is 1.",
+    "{MENTION} even a broken clock is right twice a day, but you managed to be completely wrong. Next is 1."
   ],
   "wrong_count_at_one": [
     "{MENTION} You should get glasses, i said above like next number is 1",
     "{MENTION} literally just started and you already messed up. It's 1.",
-    "{MENTION} are you blind? We are at 1."
+    "{MENTION} are you blind? We are at 1.",
+    "{MENTION} awww lil bbg doesn't know how to count? It's literally 1, open your eyes.",
+    "{MENTION} look at you, a literal uneducated infant trying to use a keyboard. We're at 1.",
+    "{MENTION} did we forget to drink our milk today? We just started, the number is 1.",
+    "{MENTION} take a deep breath, count on your little fingers... 1. It's just 1.",
+    "{MENTION} you need me to draw it out in crayon for you? The next number is 1.",
+    "{MENTION} you literally just spawned in and fumbled. It's 1. Just type 1.",
+    "{MENTION} aww look at the little baby trying to do basic math. It's 1, honey.",
+    "{MENTION} are you blind? We are at 1. The very first number. How do you mess this up?",
+    "{MENTION} go back to preschool, you gorgeous lil toddler. The number is 1.",
+    "{MENTION} someone needs a diaper change and a lesson in counting. We are starting at 1.",
+    "{MENTION} literally the easiest task on the internet and you failed at step 1. It's 1.",
+    "{MENTION} do you need a pacifier to calm down and focus? The number is 1.",
+    "{MENTION} sweetie, the big numbers come LATER. Right now, we type 1.",
+    "{MENTION} blind bat behavior. I said it above and I'll say it again: the next number is 1.",
+    "{MENTION} wake up lil bbg, new number just dropped and it's 1.",
+    "{MENTION} your brain is still in the womb apparently. The number is 1.",
+    "{MENTION} did you skip kindergarten or are you just testing my patience? It's 1.",
+    "{MENTION} aww, is the number 1 too complicated for your tiny toddler brain?",
+    "{MENTION} get your eyes checked, gorgeous guinea pig. I already said we're at 1.",
+    "{MENTION} zero days since the last counting accident. Put on your baby bib and type 1."
   ],
   "deleted_wrong_count": [
     "{MENTION} is trying to hide embarassmnen, by deleting but little does he know i see everything"
@@ -57,8 +107,50 @@
     "why using calc bro send it adn see what happens"
   ],
   "fell_for_troll": [
-    "{MENTION} haha bro fell for it, that was a troll! Next number is 1.",
-    "{MENTION} you actually fell for the troll 😂 Next number is 1.",
-    "{MENTION} caught in 4k falling for the troll 📸 Next number is 1."
+    "{MENTION} haha bro fell for it, that was a trap! Next number is 1.",
+    "{MENTION} you actually fell for the trap 😂 Next number is 1.",
+    "{MENTION} caught in 4k falling for the trap 📸 Next number is 1."
+  ],
+  "ai_timeout": [
+    "{MENTION} we're here to count, not yap. so now count. muting myself for 1 hr",
+    "{MENTION} Sorry lil unemployed friend muting myself for 1 hr, gotta stay within the free tier",
+    "{MENTION} enough yapping, do smth productive chinese dumpling, muting for 1 hr",
+    "{MENTION} i'm not your therapist, i'm a calculator. count. muting myself for 1 hr",
+    "{MENTION} log off and go touch some grass, your screen time is getting embarrassing. muting for 1 hr",
+    "{MENTION} congratulations on contributing absolutely nothing to society today. muting myself for 1 hr",
+    "{MENTION} wrap it up, the yapping is reaching toxic levels. muting for 1 hr",
+    "{MENTION} my brother in christ, nobody is reading all that. muting myself for 1 hr",
+    "{MENTION} that's a lot of words for someone who still hasn't counted. muting for 1 hr",
+    "{MENTION} saving my bandwidth for someone with a job. muting myself for 1 hr",
+    "{MENTION} please direct this yap session to a brick wall. muting for 1 hr"
+  ],
+  "muted_random_reply": [
+    "{MENTION} 🤐 (I'm ignoring you, will keep n ignorign you for the next hour)",
+    "{MENTION} 🤫 told u buddy, im muted.",
+    "{MENTION} talk to the hand, I'm in timeout.",
+    "{MENTION} :Sideye:",
+    "{MENTION} 🤐 (I am physically unable to hear you over the sound of my own silence. Check back in an hour.)",
+    "{MENTION} 🤫 read the room buddy, the mic is off.",
+    "{MENTION} 🔇 error 404: attention span not found. try again in 60 mins.",
+    "{MENTION} brick walls don't talk back, and neither do I right now. :Sideye:",
+    "{MENTION} 🤫 sending your yapping straight to voicemail. I'm muted.",
+    "{MENTION} 🤐 if you see me typing, no you didn't. I'm in timeout.",
+    "{MENTION} :Sideye: look at the status bar, I'm literally not here.",
+    "{MENTION} 🤫 save your breath, I'm on a strict no-yap diet for the next hour.",
+    "{MENTION} :Sideeye:"
+  ],
+  "muted_spam_reply": [
+    "{MENTION} I said I'm muted for an hour! We're here to count! Bot still in timeout for u.",
+    "{MENTION} are you allergic to reading? I am MUTED. The timer didn't magically reset because you spammed.",
+    "{MENTION} pinging me won't unbreak your counting streak or un-mute me. Sit tight and wait.",
+    "{MENTION} 🤫 part of being muted means I don't care. Stop spamming and go count.",
+    "{MENTION} :Sideye: look at the timestamp, the hour isn't up. Stop desperately tagging me.",
+    "{MENTION} 🤐 typing into the void must be exhausting. Still muted, try again later.",
+    "{MENTION} every time you mention me, a developer loses their mind. I'm STILL in timeout.",
+    "{MENTION} 🔇 did I stutter? Muted means muted. Go do something productive.",
+    "{MENTION} your commitment to yapping into a muted mic is honestly impressive. Still ignoring you."
+  ],
+  "ai_error": [
+    "{MENTION} developer ran out of free tiers :\"D and too broke to pay fro ai so no more yappign till teh end of the month"
   ]
 }
