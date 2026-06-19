@@ -1,9 +1,11 @@
-import discord
-from discord.ext import commands
-import os
 from dotenv import load_dotenv
 
 load_dotenv()
+
+import discord
+from discord.ext import commands
+import os
+
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 class CountingBot(commands.Bot):
