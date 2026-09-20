@@ -1,11 +1,9 @@
-from dotenv import load_dotenv
-
-load_dotenv()
-
 import discord
 from discord.ext import commands
 import os
+from dotenv import load_dotenv
 
+load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 class CountingBot(commands.Bot):
@@ -22,7 +20,8 @@ class CountingBot(commands.Bot):
 
     async def on_ready(self):
         print(f"Logged in as {self.user} (ID: {self.user.id})")
-
+		
+            
 if __name__ == "__main__":
     bot = CountingBot()
     if not TOKEN:

@@ -42,7 +42,7 @@ def parse_message(content: str):
     """
     Returns a dict with various parsing flags.
     """
-    content = content[:6]
+    content = content[:20]
     
     base_result = {
         "is_number": False,
