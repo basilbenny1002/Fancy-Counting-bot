@@ -38,6 +38,31 @@ def evaluate_math(expression: str):
     except Exception:
         return None
 
+ROMAN_REGEX = re.compile(
+    r"^M{0,4}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$",
+    re.IGNORECASE
+)
+
+ROMAN_MAP = {
+    'I': 1, 'V': 5, 'X': 10, 'L': 50,
+    'C': 100, 'D': 500, 'M': 1000
+}
+
+def roman_to_int(s: str):
+    s = s.strip().upper()
+    if not s or not ROMAN_REGEX.fullmatch(s):
+        return None
+    total = 0
+    prev_val = 0
+    for char in reversed(s):
+        val = ROMAN_MAP[char]
+        if val < prev_val:
+            total -= val
+        else:
+            total += val
+            prev_val = val
+    return total if total > 0 else None
+
 def parse_message(content: str):
     """
     Returns a dict with various parsing flags.
@@ -99,5 +124,13 @@ def parse_message(content: str):
             "is_constant": bool(re.search(r'\b(pi|e)\b', first_part.lower())),
             "raw_eval_string": first_part
         })
+    else:
+        roman_val = roman_to_int(first_part)
+        if roman_val is not None:
+            base_result.update({
+                "is_number": True,
+                "value": roman_val,
+                "raw_eval_string": first_part
+            })
         
     return base_result
