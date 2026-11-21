@@ -125,12 +125,13 @@ def parse_message(content: str):
             "raw_eval_string": first_part
         })
     else:
-        roman_val = roman_to_int(first_part)
-        if roman_val is not None:
-            base_result.update({
-                "is_number": True,
-                "value": roman_val,
-                "raw_eval_string": first_part
-            })
+        if len(parts) == 1:
+            roman_val = roman_to_int(first_part)
+            if roman_val is not None:
+                base_result.update({
+                    "is_number": True,
+                    "value": roman_val,
+                    "raw_eval_string": first_part
+                })
         
     return base_result
