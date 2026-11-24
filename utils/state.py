@@ -26,7 +26,8 @@ def get_guild_state(guild_id):
             "channel_id": None,
             "current_count": 0,
             "last_user_id": None,
-            "allow_consecutive": False
+            "allow_consecutive": False,
+            "expired_role_id": None
         }
     return state[guild_id_str]
 
@@ -38,7 +39,8 @@ def update_guild_state(guild_id, **kwargs):
             "channel_id": None,
             "current_count": 0,
             "last_user_id": None,
-            "allow_consecutive": False
+            "allow_consecutive": False,
+            "expired_role_id": None
         }
     for k, v in kwargs.items():
         state[guild_id_str][k] = v
