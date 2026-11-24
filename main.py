@@ -22,6 +22,11 @@ class CountingBot(commands.Bot):
 
     async def on_ready(self):
         print(f"Logged in as {self.user} (ID: {self.user.id})")
+
+    async def on_command_error(self, ctx, error):
+        if isinstance(error, commands.CommandNotFound):
+            return
+        raise error
 		
             
 if __name__ == "__main__":
