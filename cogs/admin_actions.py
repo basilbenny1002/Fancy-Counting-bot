@@ -38,31 +38,45 @@ class AdminActions(commands.Cog):
 
         return None, None
 
-    def parse_react_command(self, raw_content: str):
+    def parse_react_command(self, raw_content: str, current_channel_id: int = None):
         """
-        Parses $$REACT <message_link_or_ids> <emoji>
+        Parses $$REACT <message_link> <emoji>, $$REACT <channel_id> <message_id> <emoji>,
+        or $$REACT <message_id> <emoji>.
         Returns (channel_id, message_id, emoji) or (None, None, None).
         """
         content_after_cmd = re.sub(r'^(?:\$\$|!!!)\s*REACT\s*', '', raw_content, flags=re.IGNORECASE).strip()
         if not content_after_cmd:
             return None, None, None
 
-        # Check for Discord message URL:
-        # https://discord.com/channels/<guild_id>/<channel_id>/<message_id> <emoji>
-        url_match = re.search(
-            r'https?://(?:(?:canary|ptb)\.)?discord(?:app)?\.com/channels/(?:\d+|@me)/(\d+)/(\d+)\s+(.+)$',
+        # 1. Match message link: https://discord.com/channels/<guild_id>/<channel_id>/<message_id>
+        link_match = re.search(
+            r'https://(?:canary\.|ptb\.)?discord(?:app)?\.com/channels/(?:@me|\d+)/(\d+)/(\d+)',
             content_after_cmd
         )
-        if url_match:
-            channel_id = int(url_match.group(1))
-            message_id = int(url_match.group(2))
-            emoji = url_match.group(3).strip()
+        if link_match:
+            channel_id = int(link_match.group(1))
+            message_id = int(link_match.group(2))
+            emoji = re.sub(
+                r'https://(?:canary\.|ptb\.)?discord(?:app)?\.com/channels/(?:@me|\d+)/(\d+)/(\d+)',
+                '',
+                content_after_cmd
+            ).strip()
             return channel_id, message_id, emoji
 
-        # Fallback: $$REACT <channel_id> <message_id> <emoji>
-        parts = content_after_cmd.split(maxsplit=2)
-        if len(parts) == 3 and parts[0].isdigit() and parts[1].isdigit():
-            return int(parts[0]), int(parts[1]), parts[2].strip()
+        # 2. Match: channel_id message_id emoji
+        tokens = content_after_cmd.split()
+        if len(tokens) >= 3 and tokens[0].isdigit() and tokens[1].isdigit():
+            channel_id = int(tokens[0])
+            message_id = int(tokens[1])
+            emoji = " ".join(tokens[2:]).strip()
+            return channel_id, message_id, emoji
+
+        # 3. Match: message_id emoji in current channel
+        if len(tokens) >= 2 and tokens[0].isdigit() and current_channel_id:
+            channel_id = current_channel_id
+            message_id = int(tokens[0])
+            emoji = " ".join(tokens[1:]).strip()
+            return channel_id, message_id, emoji
 
         return None, None, None
 
@@ -115,7 +129,7 @@ class AdminActions(commands.Cog):
                 "• `$$SEND \"<message content>\" <channel_id>`\n"
                 "  Sends a message to any channel the bot can access. Quotes around the message are recommended.\n\n"
                 "• `$$REACT <message_link> <emoji>`\n"
-                "  Adds a reaction emoji to a message via its Discord message link (or `channel_id message_id emoji`).\n\n"
+                "  Reacts to a message using its Discord link (or `channel_id message_id emoji`).\n\n"
                 "• `$$SERVERS`\n"
                 "  Lists all Discord servers the bot is currently in (Name, ID, Member Count).\n\n"
                 "• `$$HELP`\n"
@@ -153,7 +167,8 @@ class AdminActions(commands.Cog):
 
         # Handle $$REACT
         if is_react:
-            channel_id, message_id, emoji = self.parse_react_command(content)
+            curr_chan_id = message.channel.id if message.guild else None
+            channel_id, message_id, emoji = self.parse_react_command(content, current_channel_id=curr_chan_id)
 
             if not channel_id or not message_id or not emoji:
                 await self.send_response(
@@ -163,6 +178,7 @@ class AdminActions(commands.Cog):
                 )
                 return
 
+            # Resolve channel
             channel = None
             try:
                 channel = self.bot.get_channel(channel_id)
@@ -178,25 +194,24 @@ class AdminActions(commands.Cog):
                 await self.send_response(message, f"Error fetching channel `{channel_id}`: {e}")
                 return
 
-            target_msg = None
+            # Fetch target message
             try:
                 target_msg = await channel.fetch_message(message_id)
             except discord.NotFound:
-                await self.send_response(message, f"Error: Message with ID `{message_id}` was not found in channel.")
+                await self.send_response(message, f"Error: Message `{message_id}` was not found in channel `{channel_id}`.")
                 return
             except discord.Forbidden:
-                await self.send_response(message, f"Error: Bot lacks permission to read message history in channel `{channel_id}`.")
+                await self.send_response(message, f"Error: Bot cannot read message history in channel `{channel_id}`.")
                 return
             except Exception as e:
                 await self.send_response(message, f"Error fetching message `{message_id}`: {e}")
                 return
 
+            # Add reaction
             try:
                 await target_msg.add_reaction(emoji)
-                guild = getattr(channel, "guild", None)
                 channel_name = getattr(channel, "name", str(channel_id))
-                loc_str = f"#{channel_name} in '{guild.name}'" if guild else f"channel `{channel_id}`"
-                await self.send_response(message, f"✅ Successfully reacted with {emoji} to message `{message_id}` in {loc_str}.")
+                await self.send_response(message, f"✅ Reacted with {emoji} to message `{message_id}` in #{channel_name}.")
             except discord.HTTPException as e:
                 await self.send_response(message, f"Error adding reaction: {e}")
             except Exception as e:
