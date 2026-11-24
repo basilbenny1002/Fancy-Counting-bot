@@ -17,6 +17,35 @@ class SetGroup(app_commands.Group):
         update_guild_state(interaction.guild_id, channel_id=interaction.channel_id, current_count=0, last_user_id=None)
         await interaction.response.send_message(f"Counting channel set to {interaction.channel.mention}. Start counting from 1!", ephemeral=False)
 
+    @app_commands.command(name="expired", description="Set the role given to a user who breaks or messes up the count.")
+    @app_commands.describe(role="The role to assign when someone breaks the count (leave empty to disable)")
+    @app_commands.default_permissions(administrator=True)
+    async def expired(self, interaction: discord.Interaction, role: discord.Role = None):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("You must be an administrator to use this command.", ephemeral=True)
+            return
+
+        if role is None:
+            update_guild_state(interaction.guild_id, expired_role_id=None)
+            await interaction.response.send_message("Expired bean role has been disabled.", ephemeral=False)
+            return
+
+        warning = ""
+        if interaction.guild.me and role >= interaction.guild.me.top_role:
+            warning = f"\n⚠️ **Warning**: {role.mention} is higher than or equal to my highest role ({interaction.guild.me.top_role.mention}). Please move my role above it in Server Settings > Roles so I have permission to assign it!"
+
+        update_guild_state(interaction.guild_id, expired_role_id=role.id)
+        await interaction.response.send_message(
+            f"Expired bean role set to {role.mention}. Users who break the count will now be assigned this role!{warning}",
+            ephemeral=False
+        )
+
+    @app_commands.command(name="expired_role", description="Alias for /set expired.")
+    @app_commands.describe(role="The role to assign when someone breaks the count (leave empty to disable)")
+    @app_commands.default_permissions(administrator=True)
+    async def expired_role(self, interaction: discord.Interaction, role: discord.Role = None):
+        await self.expired(interaction, role)
+
 class SettingGroup(app_commands.Group):
     def __init__(self):
         super().__init__(name="setting", description="Configure bot settings.")

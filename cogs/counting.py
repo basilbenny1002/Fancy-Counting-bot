@@ -36,6 +36,23 @@ class Counting(commands.Cog):
             except Exception as e:
                 print(f"Failed to add reaction: {e}")
 
+    async def assign_expired_role(self, message: discord.Message, state: dict):
+        role_id = state.get("expired_role_id")
+        if not role_id or not isinstance(message.author, discord.Member):
+            return
+
+        role = message.guild.get_role(role_id)
+        if not role:
+            return
+
+        try:
+            if role not in message.author.roles:
+                await message.author.add_roles(role, reason="Messed up the count")
+        except discord.Forbidden:
+            print(f"[Counting] Missing permissions to assign expired role '{role.name}' ({role.id}) to {message.author}")
+        except Exception as e:
+            print(f"[Counting] Error assigning expired role: {e}")
+
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if message.author.bot:
@@ -129,6 +146,7 @@ class Counting(commands.Cog):
                 await message.add_reaction(self.emojis.get("cross", "❌"))
                 update_guild_state(message.guild.id, current_count=0, last_user_id=None)
                 await message.channel.send(f"{message.author.mention} You cannot count twice in a row! The next number is 1.")
+                await self.assign_expired_role(message, state)
                 return
 
             await message.add_reaction(self.emojis.get("check", "✅"))
@@ -160,6 +178,7 @@ class Counting(commands.Cog):
                 
             await message.channel.send(resp)
             update_guild_state(message.guild.id, current_count=0, last_user_id=None, last_was_troll=False)
+            await self.assign_expired_role(message, state)
 
     @commands.Cog.listener()
     async def on_message_edit(self, before: discord.Message, after: discord.Message):
