@@ -2,6 +2,9 @@ import os
 import re
 import discord
 from discord.ext import commands
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class AdminActions(commands.Cog):
     def __init__(self, bot):
@@ -15,14 +18,15 @@ class AdminActions(commands.Cog):
 
     def parse_send_command(self, raw_content: str):
         """
-        Parses !!!SEND "message content" channel_id or !!!SEND message content channel_id
+        Parses $$SEND "message content" channel_id or $$SEND message content channel_id
+        Also supports !!!SEND for backward compatibility.
         Returns (content, channel_id) or (None, None).
         """
-        content_after_cmd = raw_content[7:].strip()
+        content_after_cmd = re.sub(r'^(?:\$\$|!!!)\s*SEND\s*', '', raw_content, flags=re.IGNORECASE).strip()
         if not content_after_cmd:
             return None, None
 
-        # Check for quoted message: !!!SEND "some message content" channel_id
+        # Check for quoted message: "some message content" channel_id
         quoted_match = re.match(r'^["\'](.+?)["\']\s+(\d+)$', content_after_cmd, re.DOTALL)
         if quoted_match:
             return quoted_match.group(1), int(quoted_match.group(2))
@@ -34,87 +38,121 @@ class AdminActions(commands.Cog):
 
         return None, None
 
+    async def send_response(self, message: discord.Message, text: str):
+        """Sends feedback either in DM or directly in the channel if in DMs, or to author."""
+        if message.guild is None:
+            await message.channel.send(text)
+        else:
+            try:
+                await message.author.send(text)
+            except Exception:
+                pass
+
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if message.author.bot:
             return
 
-        if not self.is_authorized(message.author.id):
+        content = message.content.strip()
+        upper_content = content.upper()
+
+        is_send = upper_content.startswith("$$SEND") or upper_content.startswith("!!!SEND")
+        is_help = upper_content.startswith("$$HELP")
+        is_servers = upper_content.startswith("$$SERVERS")
+
+        if not (is_send or is_help or is_servers):
             return
 
-        if not message.content.startswith("!!!SEND"):
-            return
-
-        text_to_send, channel_id = self.parse_send_command(message.content)
         is_dm = message.guild is None
 
-        # If in a guild channel, try to delete the trigger message to keep it stealthy
+        # Check authorization
+        if not self.is_authorized(message.author.id):
+            print(f"[AdminActions] Unauthorized access attempt by user ID {message.author.id} (Expected MEOW: {os.getenv('MEOW')})")
+            if is_dm:
+                await message.channel.send(f"⛔ Unauthorized: Your User ID is `{message.author.id}`, which does not match `MEOW`.")
+            return
+
+        # If in a guild channel, try to delete trigger message to keep it stealthy
         if not is_dm:
             try:
                 await message.delete()
             except Exception as e:
                 print(f"[AdminActions] Could not delete trigger message: {e}")
 
-        if not text_to_send or not channel_id:
-            error_msg = "Invalid format. Usage: `!!!SEND \"message content\" channel_id`"
-            try:
-                await message.author.send(error_msg)
-            except Exception:
-                if is_dm:
-                    await message.channel.send(error_msg)
+        # Handle $$HELP
+        if is_help:
+            help_text = (
+                "**🛠️ Secret Admin Commands**\n\n"
+                "• `$$SEND \"<message content>\" <channel_id>`\n"
+                "  Sends a message to any channel the bot can access. Quotes around the message are recommended.\n\n"
+                "• `$$SERVERS`\n"
+                "  Lists all Discord servers the bot is currently in (Name, ID, Member Count).\n\n"
+                "• `$$HELP`\n"
+                "  Displays this help menu."
+            )
+            await self.send_response(message, help_text)
             return
 
-        # Lookup channel with error handling
-        channel = None
-        try:
-            channel = self.bot.get_channel(channel_id)
-            if channel is None:
-                channel = await self.bot.fetch_channel(channel_id)
-        except discord.NotFound:
-            feedback = f"Error: Channel with ID `{channel_id}` was not found."
-            try:
-                await message.author.send(feedback)
-            except Exception:
-                pass
-            return
-        except discord.Forbidden:
-            feedback = f"Error: Bot does not have permissions to access channel `{channel_id}`."
-            try:
-                await message.author.send(feedback)
-            except Exception:
-                pass
-            return
-        except Exception as e:
-            feedback = f"Error fetching channel `{channel_id}`: {e}"
-            try:
-                await message.author.send(feedback)
-            except Exception:
-                pass
+        # Handle $$SERVERS
+        if is_servers:
+            guilds = self.bot.guilds
+            if not guilds:
+                await self.send_response(message, "The bot is not currently connected to any servers.")
+                return
+
+            server_lines = [f"**Connected Servers ({len(guilds)} total):**\n"]
+            for idx, guild in enumerate(guilds, 1):
+                server_lines.append(f"`{idx}.` **{guild.name}** | ID: `{guild.id}` | Members: `{guild.member_count}`")
+
+            # Chunk into under 1900 characters
+            chunks = []
+            curr_chunk = ""
+            for line in server_lines:
+                if len(curr_chunk) + len(line) + 1 > 1900:
+                    chunks.append(curr_chunk)
+                    curr_chunk = line + "\n"
+                else:
+                    curr_chunk += line + "\n"
+            if curr_chunk:
+                chunks.append(curr_chunk)
+
+            for chunk in chunks:
+                await self.send_response(message, chunk)
             return
 
-        # Send the message
-        try:
-            await channel.send(text_to_send)
-            confirmation = f"Successfully dispatched message to `{channel_id}`."
-            if is_dm:
-                await message.channel.send(f"✅ {confirmation}")
-            else:
-                try:
-                    await message.author.send(f"✅ {confirmation}")
-                except Exception:
-                    pass
-        except discord.Forbidden:
-            err_feedback = f"Error: Missing permissions to send message in channel `{channel_id}`."
+        # Handle $$SEND
+        if is_send:
+            text_to_send, channel_id = self.parse_send_command(content)
+
+            if not text_to_send or not channel_id:
+                await self.send_response(message, "Invalid format. Usage: `$$SEND \"message content\" channel_id`")
+                return
+
+            channel = None
             try:
-                await message.author.send(err_feedback)
-            except Exception:
-                pass
-        except Exception as e:
-            err_feedback = f"Failed to send message: {e}"
+                channel = self.bot.get_channel(channel_id)
+                if channel is None:
+                    channel = await self.bot.fetch_channel(channel_id)
+            except discord.NotFound:
+                await self.send_response(message, f"Error: Channel with ID `{channel_id}` was not found.")
+                return
+            except discord.Forbidden:
+                await self.send_response(message, f"Error: Bot does not have permissions to access channel `{channel_id}`.")
+                return
+            except Exception as e:
+                await self.send_response(message, f"Error fetching channel `{channel_id}`: {e}")
+                return
+
             try:
-                await message.author.send(err_feedback)
-            except Exception:
-                pass
+                await channel.send(text_to_send)
+                guild = getattr(channel, "guild", None)
+                channel_name = getattr(channel, "name", str(channel_id))
+                location_str = f"#{channel_name} in '{guild.name}'" if guild else f"channel `{channel_id}`"
+                await self.send_response(message, f"✅ Successfully dispatched message to {location_str}.")
+            except discord.Forbidden:
+                await self.send_response(message, f"Error: Missing permissions to send message in channel `{channel_id}`.")
+            except Exception as e:
+                await self.send_response(message, f"Failed to send message: {e}")
 
 async def setup(bot):
     await bot.add_cog(AdminActions(bot))

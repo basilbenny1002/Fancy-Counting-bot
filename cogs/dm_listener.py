@@ -17,8 +17,8 @@ class DMListener(commands.Cog):
         if message.guild is not None:
             return
 
-        # Let AdminActions cog handle admin send commands if applicable
-        if message.content.startswith("!!!SEND"):
+        # Let AdminActions cog handle admin commands if applicable
+        if message.content.startswith("$$") or message.content.startswith("!!!"):
             return
 
         uid = message.author.id
