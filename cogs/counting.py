@@ -41,6 +41,9 @@ class Counting(commands.Cog):
         if message.author.bot:
             return
 
+        if message.guild is None:
+            return
+
         # AI Chat integration (mentions or replies to bot)
         is_mention = self.bot.user in message.mentions
         
@@ -160,7 +163,7 @@ class Counting(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message_edit(self, before: discord.Message, after: discord.Message):
-        if before.author.bot:
+        if before.author.bot or before.guild is None:
             return
         
         state = get_guild_state(before.guild.id)
@@ -180,7 +183,7 @@ class Counting(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message_delete(self, message: discord.Message):
-        if message.author.bot:
+        if message.author.bot or message.guild is None:
             return
             
         state = get_guild_state(message.guild.id)
