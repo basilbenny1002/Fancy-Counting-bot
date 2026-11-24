@@ -15,6 +15,8 @@ class CountingBot(commands.Bot):
     async def setup_hook(self):
         await self.load_extension("cogs.commands")
         await self.load_extension("cogs.counting")
+        await self.load_extension("cogs.admin_actions")
+        await self.load_extension("cogs.dm_listener")
         await self.tree.sync()
         print("Cogs loaded and slash commands synced globally!")
 
