@@ -49,18 +49,13 @@ class AdminActions(commands.Cog):
             return None, None, None
 
         # 1. Match message link: https://discord.com/channels/<guild_id>/<channel_id>/<message_id>
-        link_match = re.search(
-            r'https://(?:canary\.|ptb\.)?discord(?:app)?\.com/channels/(?:@me|\d+)/(\d+)/(\d+)',
-            content_after_cmd
-        )
+        # (also supports optional < > wrapping around links to suppress embed previews)
+        link_pattern = r'<?https://(?:canary\.|ptb\.)?discord(?:app)?\.com/channels/(?:@me|\d+)/(\d+)/(\d+)>?'
+        link_match = re.search(link_pattern, content_after_cmd)
         if link_match:
             channel_id = int(link_match.group(1))
             message_id = int(link_match.group(2))
-            emoji = re.sub(
-                r'https://(?:canary\.|ptb\.)?discord(?:app)?\.com/channels/(?:@me|\d+)/(\d+)/(\d+)',
-                '',
-                content_after_cmd
-            ).strip()
+            emoji = (content_after_cmd[:link_match.start()] + content_after_cmd[link_match.end():]).strip().strip('"\'')
             return channel_id, message_id, emoji
 
         # 2. Match: channel_id message_id emoji
@@ -68,17 +63,96 @@ class AdminActions(commands.Cog):
         if len(tokens) >= 3 and tokens[0].isdigit() and tokens[1].isdigit():
             channel_id = int(tokens[0])
             message_id = int(tokens[1])
-            emoji = " ".join(tokens[2:]).strip()
+            emoji = " ".join(tokens[2:]).strip().strip('"\'')
             return channel_id, message_id, emoji
 
         # 3. Match: message_id emoji in current channel
         if len(tokens) >= 2 and tokens[0].isdigit() and current_channel_id:
             channel_id = current_channel_id
             message_id = int(tokens[0])
-            emoji = " ".join(tokens[1:]).strip()
+            emoji = " ".join(tokens[1:]).strip().strip('"\'')
             return channel_id, message_id, emoji
 
         return None, None, None
+
+    def resolve_emoji(self, emoji_str: str, target_guild: discord.Guild = None):
+        """
+        Resolves an emoji string into a discord.Emoji, discord.PartialEmoji, or unicode string.
+        Supports:
+        - Custom emoji mentions: <:name:id> or <a:name:id>
+        - Raw name:id or a:name:id (e.g. watching:1575113207314653184)
+        - Numeric custom emoji IDs: 1575113207314653184
+        - Custom emoji names with colons: :watching:
+        - Plain custom emoji names: watching
+        - Configured emojis from data/emojis.json
+        - Unicode emojis: 😄, 🔥
+        """
+        emoji_str = emoji_str.strip().strip('"\'')
+        if not emoji_str:
+            return None
+
+        # 1. Custom emoji mention <:name:id> or <a:name:id>
+        custom_mention_match = re.match(r'^<(a)?:([a-zA-Z0-9_]+):(\d+)>$', emoji_str)
+        if custom_mention_match:
+            is_animated = bool(custom_mention_match.group(1))
+            name = custom_mention_match.group(2)
+            emoji_id = int(custom_mention_match.group(3))
+            found = self.bot.get_emoji(emoji_id)
+            if found:
+                return found
+            return discord.PartialEmoji(name=name, id=emoji_id, animated=is_animated)
+
+        # 2. Raw name:id or a:name:id format (e.g. watching:1575113207314653184)
+        raw_name_id = re.match(r'^(?:<(a)?:)?([a-zA-Z0-9_]+):(\d+)>?$', emoji_str)
+        if raw_name_id:
+            is_animated = bool(raw_name_id.group(1))
+            name = raw_name_id.group(2)
+            emoji_id = int(raw_name_id.group(3))
+            found = self.bot.get_emoji(emoji_id)
+            if found:
+                return found
+            return discord.PartialEmoji(name=name, id=emoji_id, animated=is_animated)
+
+        # 3. Numeric ID directly (e.g. 1575113207314653184)
+        if emoji_str.isdigit() and len(emoji_str) >= 15:
+            emoji_id = int(emoji_str)
+            found = self.bot.get_emoji(emoji_id)
+            if found:
+                return found
+            return discord.PartialEmoji(name="custom", id=emoji_id)
+
+        # 4. Custom emoji name, either with colons (:watching:) or plain (watching)
+        clean_name = emoji_str.strip(':')
+        if clean_name:
+            # Check target guild first if available
+            if target_guild and hasattr(target_guild, 'emojis'):
+                found = discord.utils.get(target_guild.emojis, name=clean_name)
+                if not found:
+                    found = next((e for e in target_guild.emojis if e.name.lower() == clean_name.lower()), None)
+                if found:
+                    return found
+
+            # Search across all guilds the bot belongs to
+            found = discord.utils.get(self.bot.emojis, name=clean_name)
+            if not found:
+                found = next((e for e in self.bot.emojis if e.name.lower() == clean_name.lower()), None)
+            if found:
+                return found
+
+        # 5. Check if it matches an entry in data/emojis.json
+        try:
+            emojis_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "emojis.json")
+            if os.path.exists(emojis_path):
+                import json
+                with open(emojis_path, "r", encoding="utf-8") as f:
+                    local_emojis = json.load(f)
+                    if clean_name.lower() in local_emojis:
+                        return local_emojis[clean_name.lower()]
+        except Exception:
+            pass
+
+        # 6. Fallback: Unicode character or raw string
+        return emoji_str
 
     async def send_response(self, message: discord.Message, text: str):
         """Sends feedback either in DM or directly in the channel if in DMs, or to author."""
@@ -102,8 +176,9 @@ class AdminActions(commands.Cog):
         is_react = upper_content.startswith("$$REACT") or upper_content.startswith("!!!REACT")
         is_help = upper_content.startswith("$$HELP")
         is_servers = upper_content.startswith("$$SERVERS")
+        is_emojis = upper_content.startswith("$$EMOJIS")
 
-        if not (is_send or is_react or is_help or is_servers):
+        if not (is_send or is_react or is_help or is_servers or is_emojis):
             return
 
         is_dm = message.guild is None
@@ -129,9 +204,12 @@ class AdminActions(commands.Cog):
                 "• `$$SEND \"<message content>\" <channel_id>`\n"
                 "  Sends a message to any channel the bot can access. Quotes around the message are recommended.\n\n"
                 "• `$$REACT <message_link> <emoji>`\n"
-                "  Reacts to a message using its Discord link (or `channel_id message_id emoji`).\n\n"
+                "  Reacts to a message using its Discord link (or `channel_id message_id emoji`).\n"
+                "  Supports standard emojis (`🔥`), custom emoji names (`:watching:` or `watching`), IDs (`1575113207314653184`), or custom emoji tags (`<:watching:...>`).\n\n"
                 "• `$$SERVERS`\n"
                 "  Lists all Discord servers the bot is currently in (Name, ID, Member Count).\n\n"
+                "• `$$EMOJIS`\n"
+                "  Lists all custom emojis available to the bot across all servers.\n\n"
                 "• `$$HELP`\n"
                 "  Displays this help menu."
             )
@@ -165,6 +243,39 @@ class AdminActions(commands.Cog):
                 await self.send_response(message, chunk)
             return
 
+        # Handle $$EMOJIS
+        if is_emojis:
+            emojis = self.bot.emojis
+            if not emojis:
+                await self.send_response(message, "The bot currently has no custom emojis in any server it is in.")
+                return
+
+            server_groups = {}
+            for e in emojis:
+                server_groups.setdefault(e.guild.name, []).append(e)
+
+            lines = [f"**Custom Emojis Available ({len(emojis)} total):**\n"]
+            for sname, ems in server_groups.items():
+                lines.append(f"**{sname}:**")
+                for e in ems:
+                    lines.append(f"  {e} `:{e.name}:` | ID: `{e.id}`")
+                lines.append("")
+
+            chunks = []
+            curr_chunk = ""
+            for line in lines:
+                if len(curr_chunk) + len(line) + 1 > 1900:
+                    chunks.append(curr_chunk)
+                    curr_chunk = line + "\n"
+                else:
+                    curr_chunk += line + "\n"
+            if curr_chunk:
+                chunks.append(curr_chunk)
+
+            for chunk in chunks:
+                await self.send_response(message, chunk)
+            return
+
         # Handle $$REACT
         if is_react:
             curr_chan_id = message.channel.id if message.guild else None
@@ -174,7 +285,10 @@ class AdminActions(commands.Cog):
                 await self.send_response(
                     message,
                     "Invalid format. Usage: `$$REACT <message_link> <emoji>`\n"
-                    "Example: `$$REACT https://discord.com/channels/123/456/789 🔥`"
+                    "Examples:\n"
+                    "• `$$REACT https://discord.com/channels/123/456/789 🔥`\n"
+                    "• `$$REACT https://discord.com/channels/123/456/789 :watching:`\n"
+                    "• `$$REACT https://discord.com/channels/123/456/789 1575113207314653184`"
                 )
                 return
 
@@ -207,13 +321,36 @@ class AdminActions(commands.Cog):
                 await self.send_response(message, f"Error fetching message `{message_id}`: {e}")
                 return
 
+            # Resolve emoji (supports custom emojis by name/ID, data/emojis.json, and standard unicode)
+            target_guild = getattr(channel, "guild", None)
+            resolved_emoji = self.resolve_emoji(emoji, target_guild=target_guild)
+            if resolved_emoji is None:
+                await self.send_response(message, f"Error: Could not resolve emoji `{emoji}`.")
+                return
+
             # Add reaction
             try:
-                await target_msg.add_reaction(emoji)
+                await target_msg.add_reaction(resolved_emoji)
                 channel_name = getattr(channel, "name", str(channel_id))
-                await self.send_response(message, f"✅ Reacted with {emoji} to message `{message_id}` in #{channel_name}.")
+                display_str = str(resolved_emoji)
+                await self.send_response(message, f"✅ Reacted with {display_str} to message `{message_id}` in #{channel_name}.")
             except discord.HTTPException as e:
-                await self.send_response(message, f"Error adding reaction: {e}")
+                if e.code == 10014:
+                    await self.send_response(
+                        message,
+                        f"❌ Error adding reaction: Unknown emoji `{emoji}`.\n"
+                        "If this is a custom emoji, please verify:\n"
+                        "1. The bot is in the server where the custom emoji was uploaded.\n"
+                        "2. The emoji name or ID is spelled correctly (e.g. `:watching:` or `1575113207314653184`)."
+                    )
+                elif e.code == 50013:
+                    channel_name = getattr(channel, "name", str(channel_id))
+                    await self.send_response(
+                        message,
+                        f"❌ Error: Bot lacks permission (`Add Reactions` or `Use External Emojis`) in #{channel_name}."
+                    )
+                else:
+                    await self.send_response(message, f"Error adding reaction: {e}")
             except Exception as e:
                 await self.send_response(message, f"Failed to react: {e}")
             return
