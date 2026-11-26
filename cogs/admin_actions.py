@@ -97,6 +97,15 @@ class AdminActions(commands.Cog):
             return None, None
         return channel_id, message_id
 
+    @staticmethod
+    def _emojis_match(reaction_emoji, target_emoji) -> bool:
+        """Checks whether a Reaction.emoji matches a resolved emoji object or unicode string."""
+        r_id = getattr(reaction_emoji, "id", None)
+        t_id = getattr(target_emoji, "id", None)
+        if r_id is not None and t_id is not None:
+            return r_id == t_id
+        return str(reaction_emoji) == str(target_emoji)
+
     async def _fetch_channel_and_message(self, origin_message: discord.Message, channel_id: int, message_id: int):
         """Fetches (channel, target_message) or reports an error and returns (None, None)."""
         try:
@@ -386,12 +395,21 @@ class AdminActions(commands.Cog):
                 await self.send_response(message, f"Error: Could not resolve emoji `{emoji}`.")
                 return
 
-            # Add reaction
+            channel_name = getattr(channel, "name", str(channel_id))
+            display_str = str(resolved_emoji)
+            already_reacted = any(
+                r.me and self._emojis_match(r.emoji, resolved_emoji)
+                for r in target_msg.reactions
+            )
+
+            # Toggle reaction: remove if already reacted by the bot, else add
             try:
-                await target_msg.add_reaction(resolved_emoji)
-                channel_name = getattr(channel, "name", str(channel_id))
-                display_str = str(resolved_emoji)
-                await self.send_response(message, f"✅ Reacted with {display_str} to message `{message_id}` in #{channel_name}.")
+                if already_reacted:
+                    await target_msg.remove_reaction(resolved_emoji, self.bot.user)
+                    await self.send_response(message, f"🗑️ Removed reaction {display_str} from message `{message_id}` in #{channel_name}.")
+                else:
+                    await target_msg.add_reaction(resolved_emoji)
+                    await self.send_response(message, f"✅ Reacted with {display_str} to message `{message_id}` in #{channel_name}.")
             except discord.HTTPException as e:
                 if e.code == 10014:
                     await self.send_response(
@@ -402,15 +420,14 @@ class AdminActions(commands.Cog):
                         "2. The emoji name or ID is spelled correctly (e.g. `:watching:` or `1575113207314653184`)."
                     )
                 elif e.code == 50013:
-                    channel_name = getattr(channel, "name", str(channel_id))
                     await self.send_response(
                         message,
                         f"❌ Error: Bot lacks permission (`Add Reactions` or `Use External Emojis`) in #{channel_name}."
                     )
                 else:
-                    await self.send_response(message, f"Error adding reaction: {e}")
+                    await self.send_response(message, f"Error updating reaction: {e}")
             except Exception as e:
-                await self.send_response(message, f"Failed to react: {e}")
+                await self.send_response(message, f"Failed to update reaction: {e}")
             return
 
         # Handle $$SEND
