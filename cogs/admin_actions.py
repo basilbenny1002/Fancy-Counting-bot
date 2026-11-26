@@ -38,15 +38,13 @@ class AdminActions(commands.Cog):
 
         return None, None
 
-    def parse_react_command(self, raw_content: str, current_channel_id: int = None):
+    def _parse_target_message(self, content_after_cmd: str, current_channel_id: int = None):
         """
-        Parses $$REACT <message_link> <emoji>, $$REACT <channel_id> <message_id> <emoji>,
-        or $$REACT <message_id> <emoji>.
-        Returns (channel_id, message_id, emoji) or (None, None, None).
+        Extracts (channel_id, message_id, remainder_text) from a message link,
+        '<channel_id> <message_id> ...', or '<message_id> ...'.
         """
-        content_after_cmd = re.sub(r'^(?:\$\$|!!!)\s*REACT\s*', '', raw_content, flags=re.IGNORECASE).strip()
         if not content_after_cmd:
-            return None, None, None
+            return None, None, ""
 
         # 1. Match message link: https://discord.com/channels/<guild_id>/<channel_id>/<message_id>
         # (also supports optional < > wrapping around links to suppress embed previews)
@@ -55,25 +53,79 @@ class AdminActions(commands.Cog):
         if link_match:
             channel_id = int(link_match.group(1))
             message_id = int(link_match.group(2))
-            emoji = (content_after_cmd[:link_match.start()] + content_after_cmd[link_match.end():]).strip().strip('"\'')
-            return channel_id, message_id, emoji
+            remainder = (content_after_cmd[:link_match.start()] + content_after_cmd[link_match.end():]).strip().strip('"\'')
+            return channel_id, message_id, remainder
 
-        # 2. Match: channel_id message_id emoji
+        # 2. Match: channel_id message_id [remainder]
         tokens = content_after_cmd.split()
-        if len(tokens) >= 3 and tokens[0].isdigit() and tokens[1].isdigit():
+        if len(tokens) >= 2 and tokens[0].isdigit() and tokens[1].isdigit():
             channel_id = int(tokens[0])
             message_id = int(tokens[1])
-            emoji = " ".join(tokens[2:]).strip().strip('"\'')
-            return channel_id, message_id, emoji
+            remainder = " ".join(tokens[2:]).strip().strip('"\'')
+            return channel_id, message_id, remainder
 
-        # 3. Match: message_id emoji in current channel
-        if len(tokens) >= 2 and tokens[0].isdigit() and current_channel_id:
+        # 3. Match: message_id [remainder] in current channel
+        if len(tokens) >= 1 and tokens[0].isdigit() and current_channel_id:
             channel_id = current_channel_id
             message_id = int(tokens[0])
-            emoji = " ".join(tokens[1:]).strip().strip('"\'')
-            return channel_id, message_id, emoji
+            remainder = " ".join(tokens[1:]).strip().strip('"\'')
+            return channel_id, message_id, remainder
 
-        return None, None, None
+        return None, None, ""
+
+    def parse_react_command(self, raw_content: str, current_channel_id: int = None):
+        """
+        Parses $$REACT <message_link> <emoji>, $$REACT <channel_id> <message_id> <emoji>,
+        or $$REACT <message_id> <emoji>.
+        Returns (channel_id, message_id, emoji) or (None, None, None).
+        """
+        content_after_cmd = re.sub(r'^(?:\$\$|!!!)\s*REACT\s*', '', raw_content, flags=re.IGNORECASE).strip()
+        channel_id, message_id, emoji = self._parse_target_message(content_after_cmd, current_channel_id)
+        if not channel_id or not message_id or not emoji:
+            return None, None, None
+        return channel_id, message_id, emoji
+
+    def parse_delete_command(self, raw_content: str, current_channel_id: int = None):
+        """
+        Parses $$DELETE <message_link>, $$DELETE <channel_id> <message_id>,
+        or $$DELETE <message_id>.
+        Returns (channel_id, message_id) or (None, None).
+        """
+        content_after_cmd = re.sub(r'^(?:\$\$|!!!)\s*DELETE\s*', '', raw_content, flags=re.IGNORECASE).strip()
+        channel_id, message_id, _ = self._parse_target_message(content_after_cmd, current_channel_id)
+        if not channel_id or not message_id:
+            return None, None
+        return channel_id, message_id
+
+    async def _fetch_channel_and_message(self, origin_message: discord.Message, channel_id: int, message_id: int):
+        """Fetches (channel, target_message) or reports an error and returns (None, None)."""
+        try:
+            channel = self.bot.get_channel(channel_id)
+            if channel is None:
+                channel = await self.bot.fetch_channel(channel_id)
+        except discord.NotFound:
+            await self.send_response(origin_message, f"Error: Channel with ID `{channel_id}` was not found.")
+            return None, None
+        except discord.Forbidden:
+            await self.send_response(origin_message, f"Error: Bot does not have permissions to access channel `{channel_id}`.")
+            return None, None
+        except Exception as e:
+            await self.send_response(origin_message, f"Error fetching channel `{channel_id}`: {e}")
+            return None, None
+
+        try:
+            target_msg = await channel.fetch_message(message_id)
+        except discord.NotFound:
+            await self.send_response(origin_message, f"Error: Message `{message_id}` was not found in channel `{channel_id}`.")
+            return None, None
+        except discord.Forbidden:
+            await self.send_response(origin_message, f"Error: Bot cannot read message history in channel `{channel_id}`.")
+            return None, None
+        except Exception as e:
+            await self.send_response(origin_message, f"Error fetching message `{message_id}`: {e}")
+            return None, None
+
+        return channel, target_msg
 
     def resolve_emoji(self, emoji_str: str, target_guild: discord.Guild = None):
         """
@@ -174,11 +226,12 @@ class AdminActions(commands.Cog):
 
         is_send = upper_content.startswith("$$SEND") or upper_content.startswith("!!!SEND")
         is_react = upper_content.startswith("$$REACT") or upper_content.startswith("!!!REACT")
+        is_delete = upper_content.startswith("$$DELETE") or upper_content.startswith("!!!DELETE")
         is_help = upper_content.startswith("$$HELP")
         is_servers = upper_content.startswith("$$SERVERS")
         is_emojis = upper_content.startswith("$$EMOJIS")
 
-        if not (is_send or is_react or is_help or is_servers or is_emojis):
+        if not (is_send or is_react or is_delete or is_help or is_servers or is_emojis):
             return
 
         is_dm = message.guild is None
@@ -276,6 +329,36 @@ class AdminActions(commands.Cog):
                 await self.send_response(message, chunk)
             return
 
+        # Handle $$DELETE
+        if is_delete:
+            curr_chan_id = message.channel.id if message.guild else None
+            channel_id, message_id = self.parse_delete_command(content, current_channel_id=curr_chan_id)
+
+            if not channel_id or not message_id:
+                await self.send_response(
+                    message,
+                    "Invalid format. Usage: `$$DELETE <message_link>` (or `$$DELETE <channel_id> <message_id>`)"
+                )
+                return
+
+            channel, target_msg = await self._fetch_channel_and_message(message, channel_id, message_id)
+            if not target_msg:
+                return
+
+            if target_msg.author.id != self.bot.user.id:
+                await self.send_response(message, "❌ Error: I can only delete messages that I sent.")
+                return
+
+            try:
+                await target_msg.delete()
+                channel_name = getattr(channel, "name", str(channel_id))
+                await self.send_response(message, f"🗑️ Deleted message `{message_id}` in #{channel_name}.")
+            except discord.Forbidden:
+                await self.send_response(message, f"❌ Error: Missing permissions to delete message `{message_id}`.")
+            except Exception as e:
+                await self.send_response(message, f"Failed to delete message: {e}")
+            return
+
         # Handle $$REACT
         if is_react:
             curr_chan_id = message.channel.id if message.guild else None
@@ -292,33 +375,8 @@ class AdminActions(commands.Cog):
                 )
                 return
 
-            # Resolve channel
-            channel = None
-            try:
-                channel = self.bot.get_channel(channel_id)
-                if channel is None:
-                    channel = await self.bot.fetch_channel(channel_id)
-            except discord.NotFound:
-                await self.send_response(message, f"Error: Channel with ID `{channel_id}` was not found.")
-                return
-            except discord.Forbidden:
-                await self.send_response(message, f"Error: Bot does not have permissions to access channel `{channel_id}`.")
-                return
-            except Exception as e:
-                await self.send_response(message, f"Error fetching channel `{channel_id}`: {e}")
-                return
-
-            # Fetch target message
-            try:
-                target_msg = await channel.fetch_message(message_id)
-            except discord.NotFound:
-                await self.send_response(message, f"Error: Message `{message_id}` was not found in channel `{channel_id}`.")
-                return
-            except discord.Forbidden:
-                await self.send_response(message, f"Error: Bot cannot read message history in channel `{channel_id}`.")
-                return
-            except Exception as e:
-                await self.send_response(message, f"Error fetching message `{message_id}`: {e}")
+            channel, target_msg = await self._fetch_channel_and_message(message, channel_id, message_id)
+            if not target_msg:
                 return
 
             # Resolve emoji (supports custom emojis by name/ID, data/emojis.json, and standard unicode)
