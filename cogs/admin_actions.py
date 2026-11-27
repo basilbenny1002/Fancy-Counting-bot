@@ -7,8 +7,20 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class AdminActions(commands.Cog):
+    STATUS_MAP = {
+        "online": discord.Status.online,
+        "idle": discord.Status.idle,
+        "dnd": discord.Status.dnd,
+        "do_not_disturb": discord.Status.dnd,
+        "invis": discord.Status.invisible,
+        "invisible": discord.Status.invisible,
+        "offline": discord.Status.invisible,
+    }
+
     def __init__(self, bot):
         self.bot = bot
+        self.current_status = discord.Status.online
+        self.current_activity = None
 
     def is_authorized(self, user_id: int) -> bool:
         authorized_id = os.getenv("MEOW")
@@ -47,7 +59,6 @@ class AdminActions(commands.Cog):
             return None, None, ""
 
         # 1. Match message link: https://discord.com/channels/<guild_id>/<channel_id>/<message_id>
-        # (also supports optional < > wrapping around links to suppress embed previews)
         link_pattern = r'<?https://(?:canary\.|ptb\.)?discord(?:app)?\.com/channels/(?:@me|\d+)/(\d+)/(\d+)>?'
         link_match = re.search(link_pattern, content_after_cmd)
         if link_match:
@@ -236,11 +247,13 @@ class AdminActions(commands.Cog):
         is_send = upper_content.startswith("$$SEND") or upper_content.startswith("!!!SEND")
         is_react = upper_content.startswith("$$REACT") or upper_content.startswith("!!!REACT")
         is_delete = upper_content.startswith("$$DELETE") or upper_content.startswith("!!!DELETE")
+        is_status = upper_content.startswith("$$STATUS")
+        is_custom_status = upper_content.startswith("$$CUSTOMSTATUS") or upper_content.startswith("$$ACTIVITY")
         is_help = upper_content.startswith("$$HELP")
         is_servers = upper_content.startswith("$$SERVERS")
         is_emojis = upper_content.startswith("$$EMOJIS")
 
-        if not (is_send or is_react or is_delete or is_help or is_servers or is_emojis):
+        if not (is_send or is_react or is_delete or is_status or is_custom_status or is_help or is_servers or is_emojis):
             return
 
         is_dm = message.guild is None
@@ -265,9 +278,15 @@ class AdminActions(commands.Cog):
                 "**🛠️ Secret Admin Commands**\n\n"
                 "• `$$SEND \"<message content>\" <channel_id>`\n"
                 "  Sends a message to any channel the bot can access. Quotes around the message are recommended.\n\n"
+                "• `$$DELETE <message_link>`\n"
+                "  Deletes a message sent by the bot using its Discord link (or `channel_id message_id`).\n\n"
                 "• `$$REACT <message_link> <emoji>`\n"
-                "  Reacts to a message using its Discord link (or `channel_id message_id emoji`).\n"
+                "  Toggles a reaction on a message (adds if not reacted, removes if the bot already reacted).\n"
                 "  Supports standard emojis (`🔥`), custom emoji names (`:watching:` or `watching`), IDs (`1575113207314653184`), or custom emoji tags (`<:watching:...>`).\n\n"
+                "• `$$STATUS <online|idle|dnd|invis>`\n"
+                "  Sets the bot's online presence status.\n\n"
+                "• `$$CUSTOMSTATUS <text|clear>` (or `$$ACTIVITY`)\n"
+                "  Sets or clears the bot's custom status message.\n\n"
                 "• `$$SERVERS`\n"
                 "  Lists all Discord servers the bot is currently in (Name, ID, Member Count).\n\n"
                 "• `$$EMOJIS`\n"
@@ -336,6 +355,47 @@ class AdminActions(commands.Cog):
 
             for chunk in chunks:
                 await self.send_response(message, chunk)
+            return
+
+        # Handle $$STATUS
+        if is_status:
+            arg = re.sub(r'^\$\$\s*STATUS\s*', '', content, flags=re.IGNORECASE).strip().lower()
+            if arg not in self.STATUS_MAP:
+                await self.send_response(
+                    message,
+                    "Invalid status. Usage: `$$STATUS <online|idle|dnd|invis>`"
+                )
+                return
+
+            new_status = self.STATUS_MAP[arg]
+            try:
+                await self.bot.change_presence(status=new_status, activity=self.current_activity)
+                self.current_status = new_status
+                await self.send_response(message, f"✅ Bot status set to `{new_status.name}`.")
+            except Exception as e:
+                await self.send_response(message, f"Failed to update status: {e}")
+            return
+
+        # Handle $$CUSTOMSTATUS / $$ACTIVITY
+        if is_custom_status:
+            text = re.sub(r'^\$\$\s*(?:CUSTOMSTATUS|ACTIVITY)\s*', '', content, flags=re.IGNORECASE).strip().strip('"\'')
+            if not text:
+                await self.send_response(
+                    message,
+                    "Invalid format. Usage: `$$CUSTOMSTATUS <status text>` or `$$CUSTOMSTATUS clear`"
+                )
+                return
+
+            new_activity = None if text.lower() in ("clear", "none", "reset") else discord.CustomActivity(name=text)
+            try:
+                await self.bot.change_presence(status=self.current_status, activity=new_activity)
+                self.current_activity = new_activity
+                if new_activity is None:
+                    await self.send_response(message, "✅ Cleared custom status message.")
+                else:
+                    await self.send_response(message, f"✅ Custom status set to: `{text}`")
+            except Exception as e:
+                await self.send_response(message, f"Failed to update custom status: {e}")
             return
 
         # Handle $$DELETE
