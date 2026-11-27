@@ -224,5 +224,55 @@ class Counting(commands.Cog):
             resp = self.format_response("deleted_wrong_count", message.author.mention)
             await message.channel.send(resp)
 
+    @commands.Cog.listener()
+    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
+        if payload.guild_id is None:
+            return
+        if self.bot.user and payload.user_id == self.bot.user.id:
+            return
+        if payload.member and payload.member.bot:
+            return
+
+        state = get_guild_state(payload.guild_id)
+        if state.get("channel_id") != payload.channel_id:
+            return
+
+        ignored_unicode = {
+            self.emojis.get("eye", "👁️"),
+            self.emojis.get("eyes", "👀"),
+            self.emojis.get("check", "✅"),
+            self.emojis.get("cross", "❌"),
+            "👁️", "👁", "👀", "✅", "❌",
+        }
+        ignored_names = {
+            "eye", "eyes", "check", "white_check_mark",
+            "x", "cross", "cross_mark", "heavy_check_mark",
+        }
+
+        emoji_str = str(payload.emoji)
+        emoji_name = (payload.emoji.name or "").lower()
+        if emoji_str in ignored_unicode or emoji_name in ignored_names:
+            return
+
+        chance = 1.0 if emoji_name == "sideeye" else 0.25
+        if random.random() > chance:
+            return
+
+        try:
+            channel = self.bot.get_channel(payload.channel_id)
+            if channel is None:
+                channel = await self.bot.fetch_channel(payload.channel_id)
+            target_msg = await channel.fetch_message(payload.message_id)
+
+            react_emoji = payload.emoji
+            if payload.emoji.id:
+                cached = self.bot.get_emoji(payload.emoji.id)
+                if cached:
+                    react_emoji = cached
+
+            await target_msg.add_reaction(react_emoji)
+        except Exception as e:
+            print(f"[Counting] Could not mirror reaction {emoji_str}: {e}")
+
 async def setup(bot):
     await bot.add_cog(Counting(bot))

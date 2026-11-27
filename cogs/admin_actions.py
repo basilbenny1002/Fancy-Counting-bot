@@ -7,8 +7,20 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class AdminActions(commands.Cog):
+    STATUS_MAP = {
+        "online": discord.Status.online,
+        "idle": discord.Status.idle,
+        "dnd": discord.Status.dnd,
+        "do_not_disturb": discord.Status.dnd,
+        "invis": discord.Status.invisible,
+        "invisible": discord.Status.invisible,
+        "offline": discord.Status.invisible,
+    }
+
     def __init__(self, bot):
         self.bot = bot
+        self.current_status = discord.Status.online
+        self.current_activity = None
 
     def is_authorized(self, user_id: int) -> bool:
         authorized_id = os.getenv("MEOW")
@@ -38,6 +50,40 @@ class AdminActions(commands.Cog):
 
         return None, None
 
+    def _parse_target_message(self, content_after_cmd: str, current_channel_id: int = None):
+        """
+        Extracts (channel_id, message_id, remainder_text) from a message link,
+        '<channel_id> <message_id> ...', or '<message_id> ...'.
+        """
+        if not content_after_cmd:
+            return None, None, ""
+
+        # 1. Match message link: https://discord.com/channels/<guild_id>/<channel_id>/<message_id>
+        link_pattern = r'<?https://(?:canary\.|ptb\.)?discord(?:app)?\.com/channels/(?:@me|\d+)/(\d+)/(\d+)>?'
+        link_match = re.search(link_pattern, content_after_cmd)
+        if link_match:
+            channel_id = int(link_match.group(1))
+            message_id = int(link_match.group(2))
+            remainder = (content_after_cmd[:link_match.start()] + content_after_cmd[link_match.end():]).strip().strip('"\'')
+            return channel_id, message_id, remainder
+
+        # 2. Match: channel_id message_id [remainder]
+        tokens = content_after_cmd.split()
+        if len(tokens) >= 2 and tokens[0].isdigit() and tokens[1].isdigit():
+            channel_id = int(tokens[0])
+            message_id = int(tokens[1])
+            remainder = " ".join(tokens[2:]).strip().strip('"\'')
+            return channel_id, message_id, remainder
+
+        # 3. Match: message_id [remainder] in current channel
+        if len(tokens) >= 1 and tokens[0].isdigit() and current_channel_id:
+            channel_id = current_channel_id
+            message_id = int(tokens[0])
+            remainder = " ".join(tokens[1:]).strip().strip('"\'')
+            return channel_id, message_id, remainder
+
+        return None, None, ""
+
     def parse_react_command(self, raw_content: str, current_channel_id: int = None):
         """
         Parses $$REACT <message_link> <emoji>, $$REACT <channel_id> <message_id> <emoji>,
@@ -45,35 +91,61 @@ class AdminActions(commands.Cog):
         Returns (channel_id, message_id, emoji) or (None, None, None).
         """
         content_after_cmd = re.sub(r'^(?:\$\$|!!!)\s*REACT\s*', '', raw_content, flags=re.IGNORECASE).strip()
-        if not content_after_cmd:
+        channel_id, message_id, emoji = self._parse_target_message(content_after_cmd, current_channel_id)
+        if not channel_id or not message_id or not emoji:
             return None, None, None
+        return channel_id, message_id, emoji
 
-        # 1. Match message link: https://discord.com/channels/<guild_id>/<channel_id>/<message_id>
-        # (also supports optional < > wrapping around links to suppress embed previews)
-        link_pattern = r'<?https://(?:canary\.|ptb\.)?discord(?:app)?\.com/channels/(?:@me|\d+)/(\d+)/(\d+)>?'
-        link_match = re.search(link_pattern, content_after_cmd)
-        if link_match:
-            channel_id = int(link_match.group(1))
-            message_id = int(link_match.group(2))
-            emoji = (content_after_cmd[:link_match.start()] + content_after_cmd[link_match.end():]).strip().strip('"\'')
-            return channel_id, message_id, emoji
+    def parse_delete_command(self, raw_content: str, current_channel_id: int = None):
+        """
+        Parses $$DELETE <message_link>, $$DELETE <channel_id> <message_id>,
+        or $$DELETE <message_id>.
+        Returns (channel_id, message_id) or (None, None).
+        """
+        content_after_cmd = re.sub(r'^(?:\$\$|!!!)\s*DELETE\s*', '', raw_content, flags=re.IGNORECASE).strip()
+        channel_id, message_id, _ = self._parse_target_message(content_after_cmd, current_channel_id)
+        if not channel_id or not message_id:
+            return None, None
+        return channel_id, message_id
 
-        # 2. Match: channel_id message_id emoji
-        tokens = content_after_cmd.split()
-        if len(tokens) >= 3 and tokens[0].isdigit() and tokens[1].isdigit():
-            channel_id = int(tokens[0])
-            message_id = int(tokens[1])
-            emoji = " ".join(tokens[2:]).strip().strip('"\'')
-            return channel_id, message_id, emoji
+    @staticmethod
+    def _emojis_match(reaction_emoji, target_emoji) -> bool:
+        """Checks whether a Reaction.emoji matches a resolved emoji object or unicode string."""
+        r_id = getattr(reaction_emoji, "id", None)
+        t_id = getattr(target_emoji, "id", None)
+        if r_id is not None and t_id is not None:
+            return r_id == t_id
+        return str(reaction_emoji) == str(target_emoji)
 
-        # 3. Match: message_id emoji in current channel
-        if len(tokens) >= 2 and tokens[0].isdigit() and current_channel_id:
-            channel_id = current_channel_id
-            message_id = int(tokens[0])
-            emoji = " ".join(tokens[1:]).strip().strip('"\'')
-            return channel_id, message_id, emoji
+    async def _fetch_channel_and_message(self, origin_message: discord.Message, channel_id: int, message_id: int):
+        """Fetches (channel, target_message) or reports an error and returns (None, None)."""
+        try:
+            channel = self.bot.get_channel(channel_id)
+            if channel is None:
+                channel = await self.bot.fetch_channel(channel_id)
+        except discord.NotFound:
+            await self.send_response(origin_message, f"Error: Channel with ID `{channel_id}` was not found.")
+            return None, None
+        except discord.Forbidden:
+            await self.send_response(origin_message, f"Error: Bot does not have permissions to access channel `{channel_id}`.")
+            return None, None
+        except Exception as e:
+            await self.send_response(origin_message, f"Error fetching channel `{channel_id}`: {e}")
+            return None, None
 
-        return None, None, None
+        try:
+            target_msg = await channel.fetch_message(message_id)
+        except discord.NotFound:
+            await self.send_response(origin_message, f"Error: Message `{message_id}` was not found in channel `{channel_id}`.")
+            return None, None
+        except discord.Forbidden:
+            await self.send_response(origin_message, f"Error: Bot cannot read message history in channel `{channel_id}`.")
+            return None, None
+        except Exception as e:
+            await self.send_response(origin_message, f"Error fetching message `{message_id}`: {e}")
+            return None, None
+
+        return channel, target_msg
 
     def resolve_emoji(self, emoji_str: str, target_guild: discord.Guild = None):
         """
@@ -174,11 +246,14 @@ class AdminActions(commands.Cog):
 
         is_send = upper_content.startswith("$$SEND") or upper_content.startswith("!!!SEND")
         is_react = upper_content.startswith("$$REACT") or upper_content.startswith("!!!REACT")
+        is_delete = upper_content.startswith("$$DELETE") or upper_content.startswith("!!!DELETE")
+        is_status = upper_content.startswith("$$STATUS")
+        is_custom_status = upper_content.startswith("$$CUSTOMSTATUS") or upper_content.startswith("$$ACTIVITY")
         is_help = upper_content.startswith("$$HELP")
         is_servers = upper_content.startswith("$$SERVERS")
         is_emojis = upper_content.startswith("$$EMOJIS")
 
-        if not (is_send or is_react or is_help or is_servers or is_emojis):
+        if not (is_send or is_react or is_delete or is_status or is_custom_status or is_help or is_servers or is_emojis):
             return
 
         is_dm = message.guild is None
@@ -203,9 +278,15 @@ class AdminActions(commands.Cog):
                 "**🛠️ Secret Admin Commands**\n\n"
                 "• `$$SEND \"<message content>\" <channel_id>`\n"
                 "  Sends a message to any channel the bot can access. Quotes around the message are recommended.\n\n"
+                "• `$$DELETE <message_link>`\n"
+                "  Deletes a message sent by the bot using its Discord link (or `channel_id message_id`).\n\n"
                 "• `$$REACT <message_link> <emoji>`\n"
-                "  Reacts to a message using its Discord link (or `channel_id message_id emoji`).\n"
+                "  Toggles a reaction on a message (adds if not reacted, removes if the bot already reacted).\n"
                 "  Supports standard emojis (`🔥`), custom emoji names (`:watching:` or `watching`), IDs (`1575113207314653184`), or custom emoji tags (`<:watching:...>`).\n\n"
+                "• `$$STATUS <online|idle|dnd|invis>`\n"
+                "  Sets the bot's online presence status.\n\n"
+                "• `$$CUSTOMSTATUS <text|clear>` (or `$$ACTIVITY`)\n"
+                "  Sets or clears the bot's custom status message.\n\n"
                 "• `$$SERVERS`\n"
                 "  Lists all Discord servers the bot is currently in (Name, ID, Member Count).\n\n"
                 "• `$$EMOJIS`\n"
@@ -276,6 +357,77 @@ class AdminActions(commands.Cog):
                 await self.send_response(message, chunk)
             return
 
+        # Handle $$STATUS
+        if is_status:
+            arg = re.sub(r'^\$\$\s*STATUS\s*', '', content, flags=re.IGNORECASE).strip().lower()
+            if arg not in self.STATUS_MAP:
+                await self.send_response(
+                    message,
+                    "Invalid status. Usage: `$$STATUS <online|idle|dnd|invis>`"
+                )
+                return
+
+            new_status = self.STATUS_MAP[arg]
+            try:
+                await self.bot.change_presence(status=new_status, activity=self.current_activity)
+                self.current_status = new_status
+                await self.send_response(message, f"✅ Bot status set to `{new_status.name}`.")
+            except Exception as e:
+                await self.send_response(message, f"Failed to update status: {e}")
+            return
+
+        # Handle $$CUSTOMSTATUS / $$ACTIVITY
+        if is_custom_status:
+            text = re.sub(r'^\$\$\s*(?:CUSTOMSTATUS|ACTIVITY)\s*', '', content, flags=re.IGNORECASE).strip().strip('"\'')
+            if not text:
+                await self.send_response(
+                    message,
+                    "Invalid format. Usage: `$$CUSTOMSTATUS <status text>` or `$$CUSTOMSTATUS clear`"
+                )
+                return
+
+            new_activity = None if text.lower() in ("clear", "none", "reset") else discord.CustomActivity(name=text)
+            try:
+                await self.bot.change_presence(status=self.current_status, activity=new_activity)
+                self.current_activity = new_activity
+                if new_activity is None:
+                    await self.send_response(message, "✅ Cleared custom status message.")
+                else:
+                    await self.send_response(message, f"✅ Custom status set to: `{text}`")
+            except Exception as e:
+                await self.send_response(message, f"Failed to update custom status: {e}")
+            return
+
+        # Handle $$DELETE
+        if is_delete:
+            curr_chan_id = message.channel.id if message.guild else None
+            channel_id, message_id = self.parse_delete_command(content, current_channel_id=curr_chan_id)
+
+            if not channel_id or not message_id:
+                await self.send_response(
+                    message,
+                    "Invalid format. Usage: `$$DELETE <message_link>` (or `$$DELETE <channel_id> <message_id>`)"
+                )
+                return
+
+            channel, target_msg = await self._fetch_channel_and_message(message, channel_id, message_id)
+            if not target_msg:
+                return
+
+            if target_msg.author.id != self.bot.user.id:
+                await self.send_response(message, "❌ Error: I can only delete messages that I sent.")
+                return
+
+            try:
+                await target_msg.delete()
+                channel_name = getattr(channel, "name", str(channel_id))
+                await self.send_response(message, f"🗑️ Deleted message `{message_id}` in #{channel_name}.")
+            except discord.Forbidden:
+                await self.send_response(message, f"❌ Error: Missing permissions to delete message `{message_id}`.")
+            except Exception as e:
+                await self.send_response(message, f"Failed to delete message: {e}")
+            return
+
         # Handle $$REACT
         if is_react:
             curr_chan_id = message.channel.id if message.guild else None
@@ -292,33 +444,8 @@ class AdminActions(commands.Cog):
                 )
                 return
 
-            # Resolve channel
-            channel = None
-            try:
-                channel = self.bot.get_channel(channel_id)
-                if channel is None:
-                    channel = await self.bot.fetch_channel(channel_id)
-            except discord.NotFound:
-                await self.send_response(message, f"Error: Channel with ID `{channel_id}` was not found.")
-                return
-            except discord.Forbidden:
-                await self.send_response(message, f"Error: Bot does not have permissions to access channel `{channel_id}`.")
-                return
-            except Exception as e:
-                await self.send_response(message, f"Error fetching channel `{channel_id}`: {e}")
-                return
-
-            # Fetch target message
-            try:
-                target_msg = await channel.fetch_message(message_id)
-            except discord.NotFound:
-                await self.send_response(message, f"Error: Message `{message_id}` was not found in channel `{channel_id}`.")
-                return
-            except discord.Forbidden:
-                await self.send_response(message, f"Error: Bot cannot read message history in channel `{channel_id}`.")
-                return
-            except Exception as e:
-                await self.send_response(message, f"Error fetching message `{message_id}`: {e}")
+            channel, target_msg = await self._fetch_channel_and_message(message, channel_id, message_id)
+            if not target_msg:
                 return
 
             # Resolve emoji (supports custom emojis by name/ID, data/emojis.json, and standard unicode)
@@ -328,12 +455,21 @@ class AdminActions(commands.Cog):
                 await self.send_response(message, f"Error: Could not resolve emoji `{emoji}`.")
                 return
 
-            # Add reaction
+            channel_name = getattr(channel, "name", str(channel_id))
+            display_str = str(resolved_emoji)
+            already_reacted = any(
+                r.me and self._emojis_match(r.emoji, resolved_emoji)
+                for r in target_msg.reactions
+            )
+
+            # Toggle reaction: remove if already reacted by the bot, else add
             try:
-                await target_msg.add_reaction(resolved_emoji)
-                channel_name = getattr(channel, "name", str(channel_id))
-                display_str = str(resolved_emoji)
-                await self.send_response(message, f"✅ Reacted with {display_str} to message `{message_id}` in #{channel_name}.")
+                if already_reacted:
+                    await target_msg.remove_reaction(resolved_emoji, self.bot.user)
+                    await self.send_response(message, f"🗑️ Removed reaction {display_str} from message `{message_id}` in #{channel_name}.")
+                else:
+                    await target_msg.add_reaction(resolved_emoji)
+                    await self.send_response(message, f"✅ Reacted with {display_str} to message `{message_id}` in #{channel_name}.")
             except discord.HTTPException as e:
                 if e.code == 10014:
                     await self.send_response(
@@ -344,15 +480,14 @@ class AdminActions(commands.Cog):
                         "2. The emoji name or ID is spelled correctly (e.g. `:watching:` or `1575113207314653184`)."
                     )
                 elif e.code == 50013:
-                    channel_name = getattr(channel, "name", str(channel_id))
                     await self.send_response(
                         message,
                         f"❌ Error: Bot lacks permission (`Add Reactions` or `Use External Emojis`) in #{channel_name}."
                     )
                 else:
-                    await self.send_response(message, f"Error adding reaction: {e}")
+                    await self.send_response(message, f"Error updating reaction: {e}")
             except Exception as e:
-                await self.send_response(message, f"Failed to react: {e}")
+                await self.send_response(message, f"Failed to update reaction: {e}")
             return
 
         # Handle $$SEND
